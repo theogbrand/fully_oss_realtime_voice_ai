@@ -72,9 +72,10 @@ async def main(room_url: str, token: str):
         # )
         tts = XTTSService(
             aiohttp_session=session,
-            voice_id="Marcos Rudaski",
+            voice_id="Ana Florence",  # Marcos Rudaski
             language=Language.EN,
-            base_url="http://13.59.71.92:8000", # deploy own server
+            # base_url="http://13.59.71.92:8000",  # A10G us-east-2
+            base_url="http://34.215.127.74:8000",  # L40s us-west-2
         )
 
         # llm = OpenAILLMService(api_key=os.getenv("OPENAI_API_KEY"), model="gpt-4o")
