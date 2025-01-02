@@ -1,4 +1,5 @@
 import asyncio
+from enum import Enum
 import os
 import sys
 
@@ -85,32 +86,42 @@ async def main(room_url: str, token: str):
         StartFrame,
         TranscriptionFrame,
     )
-    from pipecat.services.ai_services import STTService
+    from pipecat.services.ai_services import SegmentedSTTService
     from pipecat.utils.time import time_now_iso8601
     from typing import AsyncGenerator
+    import io
+    import wave
+    import numpy as np
+    class Model(Enum):
+        """Available OpenAI Whisper API models"""
 
-    class WhisperAPIService(STTService):
+        WHISPER_1 = "whisper-1"
+
+    class WhisperAPIService(SegmentedSTTService):
         """Service for OpenAI's Whisper API transcription"""
 
         def __init__(
             self,
             *,
             api_key: str,
-            model: str = "whisper-1",
+            model: str | Model = Model.WHISPER_1,
             base_url: str = "https://api.openai.com/v1",
             language: Language = None,
             temperature: float = 0,
             prompt: str = None,
             response_format: str = "json",
+            sample_rate: int = 16000,
             **kwargs,
         ):
             super().__init__(**kwargs)
             self._api_key = api_key
             self._base_url = base_url.rstrip("/")
             self._session: aiohttp.ClientSession | None = None
+            self._sample_rate = sample_rate
+            self.set_model_name(model if isinstance(model, str) else model.value)
 
             self._settings = {
-                "model": model,
+                "model": self.model_name,
                 "temperature": temperature,
                 "response_format": response_format,
             }
@@ -120,69 +131,75 @@ async def main(room_url: str, token: str):
             if prompt:
                 self._settings["prompt"] = prompt
 
-        def language_to_service_language(self, language: Language) -> str:
-            """Convert internal language enum to ISO-639-1 codes used by Whisper"""
-            return str(language.value).split("-")[0].lower()
+        def can_generate_metrics(self) -> bool:
+            return True
 
-        async def start(self, frame: StartFrame):
-            await super().start(frame)
-            self._session = aiohttp.ClientSession(
-                headers={"Authorization": f"Bearer {self._api_key}"}
+        def _prepare_audio(self, audio: bytes) -> bytes:
+            """Convert raw PCM audio to WAV format"""
+            # Convert to float32 array first (matching whisper.py)
+            audio_float = (
+                np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.0
             )
 
-        async def stop(self, frame: EndFrame):
-            await super().stop(frame)
-            if self._session:
-                await self._session.close()
-                self._session = None
+            # Convert back to int16 for WAV
+            audio_int16 = (audio_float * 32768).astype(np.int16)
 
-        async def cancel(self, frame: CancelFrame):
-            await super().cancel(frame)
-            if self._session:
-                await self._session.close()
-                self._session = None
+            # Create WAV
+            with io.BytesIO() as wav_io:
+                with wave.open(wav_io, "wb") as wav_file:
+                    wav_file.setnchannels(1)  # mono
+                    wav_file.setsampwidth(2)  # 16-bit
+                    wav_file.setframerate(self._sample_rate)
+                    wav_file.writeframes(audio_int16.tobytes())
+                return wav_io.getvalue()
 
         async def run_stt(self, audio: bytes) -> AsyncGenerator[Frame, None]:
-            if not self._session:
-                yield ErrorFrame("Session not initialized")
-                return
-
+            """Transcribes given audio using Whisper API"""
             try:
                 await self.start_processing_metrics()
                 await self.start_ttfb_metrics()
 
-                # Prepare form data with audio file
-                form = aiohttp.FormData()
-                form.add_field(
-                    "file", audio, filename="audio.wav", content_type="audio/wav"
-                )
+                # Prepare audio in the same way as local Whisper
+                wav_audio = self._prepare_audio(audio)
 
-                # Add all settings as form fields
-                for key, value in self._settings.items():
-                    if value is not None:
-                        form.add_field(key, str(value))
+                # Create session for this request
+                async with aiohttp.ClientSession(
+                    headers={"Authorization": f"Bearer {self._api_key}"}
+                ) as session:
+                    # Prepare form data
+                    form = aiohttp.FormData()
+                    form.add_field(
+                        "file",
+                        wav_audio,
+                        filename="audio.wav",
+                        content_type="audio/wav",
+                    )
 
-                async with self._session.post(
-                    f"{self._base_url}/audio/transcriptions", data=form
-                ) as response:
-                    await self.stop_ttfb_metrics()
+                    # Add settings as form fields
+                    for key, value in self._settings.items():
+                        if value is not None:
+                            form.add_field(key, str(value))
 
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(
-                            f"Whisper API error: {response.status} - {error_text}"
-                        )
-                        yield ErrorFrame(f"Transcription failed: {error_text}")
-                        return
+                    # Make API request
+                    async with session.post(
+                        f"{self._base_url}/audio/transcriptions", data=form
+                    ) as response:
+                        await self.stop_ttfb_metrics()
 
-                    result = await response.json()
-                    text = result.get("text", "").strip()
+                        if response.status != 200:
+                            error_text = await response.text()
+                            logger.error(
+                                f"Whisper API error: {response.status} - {error_text}"
+                            )
+                            yield ErrorFrame(f"Transcription failed: {error_text}")
+                            return
 
-                    if text:
-                        logger.debug(f"Transcription: [{text}]")
-                        yield TranscriptionFrame(text, "", time_now_iso8601())
-                    else:
-                        yield ErrorFrame("Empty transcription received")
+                        result = await response.json()
+                        text = result.get("text", "").strip()
+
+                        if text:
+                            logger.debug(f"Transcription: [{text}]")
+                            yield TranscriptionFrame(text, "", time_now_iso8601())
 
             except Exception as e:
                 logger.exception(f"Whisper API error: {e}")
@@ -190,8 +207,9 @@ async def main(room_url: str, token: str):
             finally:
                 await self.stop_processing_metrics()
 
-        def can_generate_metrics(self) -> bool:
-            return True
+        def language_to_service_language(self, language: Language) -> str:
+            """Convert internal language enum to ISO-639-1 codes"""
+            return str(language.value).split("-")[0].lower()
     class SealionLLMService(OpenAILLMService):
         """A service for interacting with Groq's API using the OpenAI-compatible interface.
 
