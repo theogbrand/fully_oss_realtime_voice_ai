@@ -256,8 +256,10 @@ async def main(room_url: str, token: str):
         # stt = WhisperAPIService(api_key=os.getenv("OPENAI_API_KEY"), model="whisper-1")
         stt = WhisperAPIService(
             api_key=os.getenv("GROQ_API_KEY"),
-            base_url="https://api.groq.com/openai/v1",
-            model="whisper-large-v3",
+            # base_url="https://api.groq.com/openai/v1",
+            # model="whisper-large-v3",
+            base_url="http://35.91.186.23:8000/v1",
+            model="whisper-1",
         )
 
         # tts = CartesiaTTSService(
