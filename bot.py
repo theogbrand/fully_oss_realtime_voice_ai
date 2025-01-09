@@ -20,70 +20,14 @@ async def main(room_url: str, token: str):
     from pipecat.pipeline.runner import PipelineRunner
     from pipecat.pipeline.task import PipelineParams, PipelineTask
     from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
-    from pipecat.services.cartesia import CartesiaTTSService
     from pipecat.services.xtts import XTTSService
     from pipecat.services.openai import OpenAILLMService
     from pipecat.transports.services.daily import DailyParams, DailyTransport
     from pipecat.transcriptions.language import Language
     from loguru import logger
-
-    # from openai.types.audio import Transcription
-    # from typing import Optional
-    # from pipecat.services.ai_services import SegmentedSTTService
-    # from pipecat.frames.frames import Frame, TranscriptionFrame, ErrorFrame
-    # from pipecat.utils.time import time_now_iso8601
-    # from openai import OpenAI
-    # from typing import AsyncGenerator
-
-    # class OpenAISTTService(SegmentedSTTService):
-    #     def __init__(
-    #         self,
-    #         *,
-    #         model: str = "whisper-1",
-    #         api_key: Optional[str] = None,
-    #         base_url: Optional[str] = None,
-    #         **kwargs,
-    #     ):
-    #         super().__init__(**kwargs)
-    #         self.set_model_name(model)
-    #         self._client = OpenAI()
-
-    #     async def set_model(self, model: str):
-    #         self.set_model_name(model)
-
-    #     def can_generate_metrics(self) -> bool:
-    #         return True
-
-    #     async def run_stt(self, audio: bytes) -> AsyncGenerator[Frame, None]:
-    #         try:
-    #             await self.start_processing_metrics()
-    #             await self.start_ttfb_metrics()
-
-    #             response: Transcription = (
-    #                 await self._client.audio.transcriptions.create(
-    #                     file=("audio.wav", audio, "audio/wav"), model=self.model_name
-    #                 )
-    #             )
-
-    #             await self.stop_ttfb_metrics()
-    #             await self.stop_processing_metrics()
-
-    #             text = response.text.strip()
-
-    #             if text:
-    #                 logger.debug(f"Transcription: [{text}]")
-    #                 yield TranscriptionFrame(text, "", time_now_iso8601())
-    #             else:
-    #                 logger.warning("Received empty transcription from API")
-
-    #         except Exception as e:
-    #             logger.exception(f"Exception during transcription: {e}")
-    #             yield ErrorFrame(f"Error during transcription: {str(e)}")
     from pipecat.frames.frames import (
-        CancelFrame,
         ErrorFrame,
         Frame,
-        StartFrame,
         TranscriptionFrame,
     )
     from pipecat.services.ai_services import SegmentedSTTService
@@ -97,7 +41,10 @@ async def main(room_url: str, token: str):
 
         WHISPER_1 = "whisper-1"
 
-    class WhisperAPIService(SegmentedSTTService):
+    class WhisperAPIService(
+        SegmentedSTTService
+    ):  # override SegmentedSTTService from Pipecat
+        # Unusual to be placed here, expected for these changes to be in the Whisper server, though I found it simpler to do this for now to fit the Pipecat interface.
         """Service for OpenAI's Whisper API transcription"""
 
         def __init__(
@@ -180,7 +127,6 @@ async def main(room_url: str, token: str):
                         if value is not None:
                             form.add_field(key, str(value))
 
-                    # Make API request
                     async with session.post(
                         f"{self._base_url}/audio/transcriptions", data=form
                     ) as response:
@@ -210,16 +156,17 @@ async def main(room_url: str, token: str):
         def language_to_service_language(self, language: Language) -> str:
             """Convert internal language enum to ISO-639-1 codes"""
             return str(language.value).split("-")[0].lower()
-    class SealionLLMService(OpenAILLMService):
-        """A service for interacting with Groq's API using the OpenAI-compatible interface.
 
-        This service extends OpenAILLMService to connect to Groq's API endpoint while
+    class SealionLLMService(OpenAILLMService):
+        """A service for interacting with any OpenAI-compatible interface.
+
+        This service extends OpenAILLMService to connect to SEA-LION's API endpoint while
         maintaining full compatibility with OpenAI's interface and functionality.
 
         Args:
-            api_key (str): The API key for accessing Groq's API
-            base_url (str, optional): The base URL for Groq API. Defaults to "https://api.groq.com/openai/v1"
-            model (str, optional): The model identifier to use. Defaults to "llama-3.1-70b-versatile"
+            api_key (str): The API key for accessing the LLM API
+            base_url (str, optional): The base URL for the LLM API.
+            model (str, optional): The model identifier to use.
             **kwargs: Additional keyword arguments passed to OpenAILLMService
         """
 
@@ -253,30 +200,29 @@ async def main(room_url: str, token: str):
             ),
         )
 
-        # stt = WhisperAPIService(api_key=os.getenv("OPENAI_API_KEY"), model="whisper-1")
+        # stt = WhisperAPIService(api_key=os.getenv("OPENAI_API_KEY"), model="whisper-1") # for using OpenAI's Whisper API
         stt = WhisperAPIService(
-            api_key=os.getenv("GROQ_API_KEY"),
-            # base_url="https://api.groq.com/openai/v1",
-            # model="whisper-large-v3",
-            base_url="http://35.91.186.23:8000/v1",
+            api_key=os.getenv(
+                "GROQ_API_KEY"
+            ),  # replace with your own API key for the Whisper server
+            base_url="http://35.91.186.23:8000/v1",  # replace with your own base URL for the Whisper server
             model="whisper-1",
         )
 
         # tts = CartesiaTTSService(
         #     api_key=os.getenv("CARTESIA_API_KEY", ""), voice_id="79a125e8-cd45-4c13-8a67-188112f4dd22"
-        # )
+        # ) # for using Cartesia's API
         tts = XTTSService(
             aiohttp_session=session,
             voice_id="Ana Florence",  # Marcos Rudaski
             language=Language.EN,
-            # base_url="http://13.59.71.92:8000",  # A10G us-east-2
             base_url="http://35.94.29.191:8000",  # L40s us-west-2
         )
 
-        # llm = OpenAILLMService(api_key=os.getenv("OPENAI_API_KEY"), model="gpt-4o")
+        # llm = OpenAILLMService(api_key=os.getenv("OPENAI_API_KEY"), model="gpt-4o") # for using OpenAI's API
         llm = SealionLLMService(
             api_key=os.getenv("AISG_API_KEY"),
-        )
+        )  # for using SEA-LION's API
 
         messages = [
             {
@@ -310,6 +256,7 @@ async def main(room_url: str, token: str):
             ),
         )
 
+        # Event handlers for Daily WebRTC
         @transport.event_handler("on_first_participant_joined")
         async def on_first_participant_joined(transport, participant):
             await transport.capture_participant_transcription(participant["id"])
