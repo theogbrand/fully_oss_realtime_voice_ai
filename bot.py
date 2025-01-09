@@ -81,6 +81,7 @@ async def main(room_url: str, token: str):
         def can_generate_metrics(self) -> bool:
             return True
 
+        # TODO: this is model specific, so check if it is compatible with the model you are using
         def _prepare_audio(self, audio: bytes) -> bytes:
             """Convert raw PCM audio to WAV format"""
             # Convert to float32 array first (matching whisper.py)
@@ -192,7 +193,7 @@ async def main(room_url: str, token: str):
             "bot",
             DailyParams(
                 audio_out_enabled=True,
-                audio_out_sample_rate=24000,
+                audio_out_sample_rate=24000,  # TODO: be careful with this setting, it is model specific e.g. audio_out_sample_rate should match the sample rate specified by the specifications of the STT model
                 transcription_enabled=False,
                 vad_enabled=True,
                 vad_analyzer=SileroVADAnalyzer(),
@@ -203,9 +204,9 @@ async def main(room_url: str, token: str):
         # stt = WhisperAPIService(api_key=os.getenv("OPENAI_API_KEY"), model="whisper-1") # for using OpenAI's Whisper API
         stt = WhisperAPIService(
             api_key=os.getenv(
-                "GROQ_API_KEY"
+                "WHISPER_API_KEY"
             ),  # replace with your own API key for the Whisper server
-            base_url="http://35.91.186.23:8000/v1",  # replace with your own base URL for the Whisper server
+            base_url="http://35.91.186.23:8000/v1",  # TODO: replace with your own base URL for the Whisper server
             model="whisper-1",
         )
 
@@ -216,7 +217,7 @@ async def main(room_url: str, token: str):
             aiohttp_session=session,
             voice_id="Ana Florence",  # Marcos Rudaski
             language=Language.EN,
-            base_url="http://35.94.29.191:8000",  # L40s us-west-2
+            base_url="http://35.94.29.191:8000",  # TODO: replace with your own base URL for the XTTS server
         )
 
         # llm = OpenAILLMService(api_key=os.getenv("OPENAI_API_KEY"), model="gpt-4o") # for using OpenAI's API
