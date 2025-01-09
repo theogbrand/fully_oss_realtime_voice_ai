@@ -62,6 +62,16 @@ Hosting inference servers can be quite expensive, a single L40S up for 24 hours 
 
 Another option is to explore serverless inference for perpetual uptime or a using AWS's native scheduler to trigger a Lambda to shut down the server overnight if only used for development.
 
+# User Interface
+Code for the user interface used in the video can be found [here](https://github.com/theogbrand/realtime-voicebot-ui).
+
+Alternatively, you can call the modal endpoint using ```curl -X POST {MODAL_URL}``` and recieve the daily room_url.
+
+Example curl reponse:
+```json
+{"room_url":"https://ob1-aisg.daily.co/pcJMY4YkWMrKuNdvHSA5","eyJhbGciOiJIUzI1NiIsIn...":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyI..."}
+```
+
 # References
 
 ## Audio foundation models
