@@ -48,21 +48,35 @@ This app sets some sensible defaults for reducing cold starts, such as `minkeep_
 
 It has been configured to only allow a concurrency of 1 (`max_inputs=1`) as each user will require their own running function.
 
-# OpenAI Compatible Whisper Servers
+# Configuring STT and TTS Servers
+## Speech-to-Text (STT)
+My Whisper streaming server implementation can be found [here](https://github.com/theogbrand/whisper-server), which is ran using docker.
+
+## Text-to-Speech (TTS)
+[XTTS streaming server](https://github.com/coqui-ai/xtts-streaming-server/blob/main/server/main.py) is ran here using docker.
+
+## Cloud Hosting Set Up
+Having tried model hosting services like Replicate, Modal, RunPod, LambdaLabs, I find the simplest way to deploy the inference servers to be a canonical AWS GPU server. You can use my [Packer image](https://github.com/theogbrand/ai-server-setup/blob/main/aws/packer/l40s-48gb-ubuntu-docker-nvidia.pkr.hcl) to easily set up CUDA and Docker dependencies. The same image is used to set up both Whisper and XTTS servers above.
+
+Hosting inference servers can be quite expensive, a single L40S up for 24 hours will cost about ~$5000/month which make API services more attractive. 
+
+Another option is to explore serverless inference for perpetual uptime or a using AWS's native scheduler to trigger a Lambda to shut down the server overnight if only used for development.
+
+# References
+
+## Audio foundation models
+* Modal [Seamless M4T](https://modal.com/docs/examples/seamless-chat), [code](https://github.com/modal-labs/seamless-chat/blob/main/seamless.py)
+
+## Fusion models
+* [Moshi](https://github.com/modal-labs/quillman/blob/main/src/moshi.py)
+
+## OpenAI Compatible Whisper Servers
 * [Faster Whisper Server](https://github.com/fedirz/faster-whisper-server)
 * [More barebones version](https://github.com/matatonic/openedai-whisper)
 * [another small version](https://github.com/morioka/tiny-openai-whisper-api)
 
-# Whisper Streaming Servers
+## Whisper Streaming Servers
 * https://github.com/ufal/whisper_streaming?tab=readme-ov-file
 * https://github.com/ggoonnzzaallo/llm_experiments/blob/main/streamed_text_plus_streamed_audio.py
 * https://github.com/modal-labs/modal-examples/blob/main/06_gpu_and_ml/openai_whisper/streaming/main.py
 
-* Other STT
-* Modal [Seamless M4T](https://modal.com/docs/examples/seamless-chat), [code](https://github.com/modal-labs/seamless-chat/blob/main/seamless.py)
-
-# Other TTS
-* [Parler TTS](https://github.com/huggingface/parler-tts)
-
-References
-* [Moshi](https://github.com/modal-labs/quillman/blob/main/src/moshi.py)
