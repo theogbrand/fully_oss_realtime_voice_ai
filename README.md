@@ -1,6 +1,17 @@
-# Deploying Pipecat to Modal.com
+# Realtime Voice AI using Open Source models only
 
-Barebones deployment example for [modal.com](https://www.modal.com)
+Like OpenAI's realtime voice AI, using open source models only. 
+
+https://github.com/user-attachments/assets/4579e8fc-011e-4061-b987-9bc12b78848d
+
+# Set Up
+
+## Overview
+There are four components involved, mainly a [Pipecat](https://github.com/pipecat-ai/pipecat) server, found in this repository which orchestrate the end-to-end pipeline, and three distinct models for each step in the pipeline: speech-to-text (STT) model, instruction-tuned text completion model and text-to-speech model (TTS). In this case, [Whisper](https://huggingface.co/openai/whisper-large-v2), [SEA-LIONv2](https://huggingface.co/aisingapore/llama3-8b-cpt-sea-lionv2.1-instruct) and [XTTS](https://huggingface.co/coqui/XTTS-v2) is used correspondingly. Other models can be substituted, such as [Parler-TTS](https://github.com/huggingface/parler-tts) for TTS with some adjustments to the current code. 
+
+To support realtime capabilities, GPU-acceleration is required for running models, so you will need to host each model on a [L40s](https://aws.amazon.com/ec2/instance-types/g6e/) GPU minimally based on my experience, to achieve realtime performance. The hosted server should then be integrated to the interface provided by Pipecat, which might require additional effort to do so depending on how the substitute model encodes input and decodes output. This part can be tricky and model dependent, especially for the STT and TTS step.
+
+## Pipecat Orchestration Server 
 
 1. Install dependencies
 
